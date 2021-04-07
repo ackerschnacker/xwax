@@ -130,7 +130,7 @@ xwax.o:		.version
 # Supporting programs
 
 mktimecode:	mktimecode.o
-mktimecode:	LDLIBS  += -lm
+mktimecode:	LDLIBS  += -lm raisedcosinefilter.c
 
 # Install to system
 
