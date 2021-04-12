@@ -48,7 +48,7 @@
 
 #define SWITCH_PHASE 0x1 /* tone phase difference of 270 (not 90) degrees */
 #define SWITCH_PRIMARY 0x2 /* use left channel (not right) as primary */
-#define SWITCH_POLARITY 0x4 /* read bit values in negative (not positive) */
+#define SWITCH_POLARITY 0x4 /* read bit values in negative (not polarity) */
 
 static struct timecode_def timecodes[] = {
     {
@@ -96,6 +96,17 @@ static struct timecode_def timecodes[] = {
         .name = "traktor_b",
         .desc = "Traktor Scratch, side B",
         .resolution = 2000,
+        .flags = SWITCH_PRIMARY | SWITCH_POLARITY | SWITCH_PHASE,
+        .bits = 23,
+        .seed = 0x32066c,
+        .taps = 0x041040, /* same as side A */
+        .length = 2110000,
+        .safe = 2090000,
+    },
+    {
+        .name = "traktor_mk2_cd",
+        .desc = "Traktor Scratch MK2, CD",
+        .resolution = 3000,
         .flags = SWITCH_PRIMARY | SWITCH_POLARITY | SWITCH_PHASE,
         .bits = 23,
         .seed = 0x32066c,
@@ -193,19 +204,31 @@ static int build_lookup(struct timecode_def *def)
     fprintf(stderr, "Building LUT for %d bit %dHz timecode (%s)\n",
             def->bits, def->resolution, def->desc);
 
+    /* Initialize an empty lookup table */
+
     if (lut_init(&def->lut, def->length) == -1)
-	return -1;
+        return -1;
+
+    /* Set the current bit to the defined seed value of the timecode */
 
     current = def->seed;
+
+    /* 
+     * Advance through the whole LFSR and push bit by bit into the
+     * lookup table, which is later used for determining the position 
+     * in the LFSR
+     */
 
     for (n = 0; n < def->length; n++) {
         bits_t next;
 
-        /* timecode must not wrap */
-        dassert(lut_lookup(&def->lut, current) == (unsigned)-1);
+        /* Timecode must not wrap */
+
+        dassert(lut_lookup(&def->lut, current) == (unsigned) -1);
         lut_push(&def->lut, current);
 
-        /* check symmetry of the lfsr functions */
+        /* Check for symmetry of the LFSR functions */
+
         next = fwd(current, def);
         dassert(rev(next, def) == current);
 
@@ -269,7 +292,7 @@ void timecoder_free_lookup(void) {
 
 static void init_channel(struct timecoder_channel *ch)
 {
-    ch->positive = false;
+    ch->polarity = NEGATIVE;
     ch->zero = 0;
 }
 
@@ -294,12 +317,13 @@ void timecoder_init(struct timecoder *tc, struct timecode_def *def,
     tc->dt = 1.0 / sample_rate;
     tc->zero_alpha = tc->dt / (ZERO_RC + tc->dt);
     tc->threshold = ZERO_THRESHOLD;
+
     if (phono)
-        tc->threshold >>= 5; /* approx -36dB */
+        tc->threshold >>= 5; /* approx -36dB  ?? */
 
     tc->forwards = 1;
-    init_channel(&tc->primary);
-    init_channel(&tc->secondary);
+    init_channel(&tc->chR);
+    init_channel(&tc->chL);
     pitch_init(&tc->pitch, tc->dt);
 
     tc->ref_level = INT_MAX;
@@ -323,8 +347,10 @@ void timecoder_clear(struct timecoder *tc)
 /*
  * Initialise a raster display of the incoming audio
  *
- * The monitor (otherwise known as 'scope' in the interface) is an x-y
- * display of the post-calibrated incoming audio.
+ * The monitor (otherwise known as 'scope' in the interface) is a visualization
+ * of the timecode signal on the complex plane
+ *
+ * https://en.wikipedia.org/wiki/Complex_plane
  *
  * Return: -1 if not enough memory could be allocated, otherwise 0
  */
@@ -363,15 +389,17 @@ static void detect_zero_crossing(struct timecoder_channel *ch,
                                  signed int threshold)
 {
     ch->crossing_ticker++;
-
     ch->swapped = false;
-    if (v > ch->zero + threshold && !ch->positive) {
+
+    if (v > ch->zero + threshold && ch->polarity == NEGATIVE) {
         ch->swapped = true;
-        ch->positive = true;
+        ch->polarity = true;
         ch->crossing_ticker = 0;
-    } else if (v < ch->zero - threshold && ch->positive) {
+    } 
+    
+    else if (v < ch->zero - threshold && ch->polarity == POSITIVE) {
         ch->swapped = true;
-        ch->positive = false;
+        ch->polarity = false;
         ch->crossing_ticker = 0;
     }
 
@@ -392,7 +420,7 @@ static void update_monitor(struct timecoder *tc, signed int x, signed int y)
     size = tc->mon_size;
     ref = tc->ref_level;
 
-    /* Decay the pixels already in the montior */
+    /* Decay the pixels already in the monitor */
 
     if (++tc->mon_counter % MONITOR_DECAY_EVERY == 0) {
         int p;
@@ -405,9 +433,10 @@ static void update_monitor(struct timecoder *tc, signed int x, signed int y)
 
     assert(ref > 0);
 
-    /* ref_level is half the prevision of signal level */
-    px = size / 2 + (long long)x * size / ref / 8;
-    py = size / 2 + (long long)y * size / ref / 8;
+    /* ref_level is half the precision of signal level */
+
+    px = size / 2 + (long long) x * size / ref / 8;
+    py = size / 2 + (long long) y * size / ref / 8;
 
     if (px < 0 || px >= size || py < 0 || py >= size)
         return;
@@ -432,23 +461,44 @@ static void process_bitstream(struct timecoder *tc, signed int m)
      * the vinyl, regardless of the direction. */
 
     if (tc->forwards) {
-	tc->timecode = fwd(tc->timecode, tc->def);
-	tc->bitstream = (tc->bitstream >> 1)
-	    + (b << (tc->def->bits - 1));
 
-    } else {
-	bits_t mask;
+        /* Advance LFSR forward */
 
-	mask = ((1 << tc->def->bits) - 1);
-	tc->timecode = rev(tc->timecode, tc->def);
-	tc->bitstream = ((tc->bitstream << 1) & mask) + b;
+	    tc->timecode  = fwd(tc->timecode, tc->def);
+
+        /* Read next bit? */
+
+	    tc->bitstream = (tc->bitstream >> 1)
+	                  + (b << (tc->def->bits - 1));
+    } 
+    
+    else {
+
+
+	    bits_t mask = ((1 << tc->def->bits) - 1);
+
+        /* Advance LFSR backward */
+
+	    tc->timecode = rev(tc->timecode, tc->def);
+
+        /* Read next bit? */
+
+	    tc->bitstream = ((tc->bitstream << 1) & mask) + b;
     }
 
+    /* Compare the expected LFSR bit to the bit read from the vinyl */
+
     if (tc->timecode == tc->bitstream)
-	tc->valid_counter++;
+        tc->valid_counter++; /* Advance counter if equal */
+
+    /* 
+     * If they are not equal, reset the counter and assign the current
+     * bit read from the timecode to the timecoder struct 
+     */
+
     else {
-	tc->timecode = tc->bitstream;
-	tc->valid_counter = 0;
+        tc->timecode = tc->bitstream;
+        tc->valid_counter = 0;
     }
 
     /* Take note of the last time we read a valid timecode */
@@ -463,8 +513,8 @@ static void process_bitstream(struct timecoder *tc, signed int m)
     debug("%+6d zero, %+6d (ref %+6d)\t= %d%c (%5d)",
           tc->primary.zero,
           m, tc->ref_level,
-	  b, tc->valid_counter == 0 ? 'x' : ' ',
-	  tc->valid_counter);
+          b, tc->valid_counter == 0 ? 'x' : ' ',
+          tc->valid_counter);
 }
 
 /*
@@ -474,58 +524,73 @@ static void process_bitstream(struct timecoder *tc, signed int m)
  * of a signed int; ie. 32-bit signed.
  */
 
-static void process_sample(struct timecoder *tc,
-			   signed int primary, signed int secondary)
+static void process_sample(struct timecoder *tc, signed int chR, signed int chL)
 {
-    detect_zero_crossing(&tc->primary, primary, tc->zero_alpha, tc->threshold);
-    detect_zero_crossing(&tc->secondary, secondary, tc->zero_alpha, tc->threshold);
+    /* Detect crossing of the x-axis for both channels */
+
+    detect_zero_crossing(&tc->chR, chR, tc->zero_alpha, tc->threshold);
+    detect_zero_crossing(&tc->chL, chL, tc->zero_alpha, tc->threshold);
 
     /* If an axis has been crossed, use the direction of the crossing
      * to work out the direction of the vinyl */
 
-    if (tc->primary.swapped || tc->secondary.swapped) {
+    if (tc->chR.swapped || tc->chL.swapped) {
         bool forwards;
+ 
+        /* Check direction on right channel polarity swap */
 
-        if (tc->primary.swapped) {
-            forwards = (tc->primary.positive != tc->secondary.positive);
-        } else {
-            forwards = (tc->primary.positive == tc->secondary.positive);
+        if (tc->chR.swapped) {
+            forwards = (tc->chR.polarity != tc->chL.polarity);
+        } 
+
+        /* Check direction on left channel polarity swap */
+
+        else {
+            forwards = (tc->chR.polarity == tc->chL.polarity);
         }
 
-        if (tc->def->flags & SWITCH_PHASE)
-	    forwards = !forwards;
+        /* Phase switch of Traktor MK1 timecode when crossing the x-axis */
 
-        if (forwards != tc->forwards) { /* direction has changed */
+        if (tc->def->flags & SWITCH_PHASE)
+            forwards = !forwards;
+
+        /* Compare the new direction to the old direction */
+
+        if (forwards != tc->forwards) { 
             tc->forwards = forwards;
-            tc->valid_counter = 0;
+            tc->valid_counter = 0; 
         }
     }
 
     /* If any axis has been crossed, register movement using the pitch
      * counters */
 
-    if (!tc->primary.swapped && !tc->secondary.swapped)
-	pitch_dt_observation(&tc->pitch, 0.0);
-    else {
-	double dx;
+    if (!tc->chR.swapped && !tc->chL.swapped)
+        pitch_dt_observation(&tc->pitch, 0.0);
 
-	dx = 1.0 / tc->def->resolution / 4;
-	if (!tc->forwards)
-	    dx = -dx;
-	pitch_dt_observation(&tc->pitch, dx);
+    else {
+	    double dx;
+
+	    dx = 1.0 / tc->def->resolution / 4;
+
+	    if (!tc->forwards)
+	        dx = -dx;
+
+	    pitch_dt_observation(&tc->pitch, dx);
     }
 
-    /* If we have crossed the primary channel in the right polarity,
-     * it's time to read off a timecode 0 or 1 value */
+    /* If we have crossed the left channel and the right channel has a 
+     * positive polarity, it's time to read off a timecode 0 or 1 value */
 
-    if (tc->secondary.swapped &&
-       tc->primary.positive == ((tc->def->flags & SWITCH_POLARITY) == 0))
+    if (tc->chL.swapped && tc->chR.polarity == 
+      ((tc->def->flags & SWITCH_POLARITY) == 0))
     {
         signed int m;
 
-        /* scale to avoid clipping */
-        m = abs(primary / 2 - tc->primary.zero / 2);
-	process_bitstream(tc, m);
+        /* Scale to avoid clipping */
+
+        m = abs(chR / 2 - tc->chR.zero / 2);
+        process_bitstream(tc, m);
     }
 
     tc->timecode_ticker++;

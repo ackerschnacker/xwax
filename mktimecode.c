@@ -41,10 +41,10 @@
     "(C) Copyright 2018 Mark Hills <mark@xwax.org>"
 
 
-#define OFFSETMOD 0          // Set to 1 for offset modulation and 0 for amplitude modulation 
+#define OFFSETMOD 1          // Set to 1 for offset modulation and 0 for amplitude modulation 
 #define SAMPLERATE 44100     // Sampling rate in bits/s
-#define CARRIERFREQ 1000     // Frequency of the carrier wave in Hz
-#define SYMBOLRATE 1000      // Rate of symbols (bits)
+#define CARRIERFREQ 3000     // Frequency of the carrier wave in Hz
+#define SYMBOLRATE 1200      // Rate of symbols (bits)
 #define SEED 0x59017         // First bit for the Linear Feedback Shift Register
 #define TAPS 0x361e4         // Taps for Linear Feedback Shift Register
 #define BITS 20              // Length of the Linear Feedback Shift Register

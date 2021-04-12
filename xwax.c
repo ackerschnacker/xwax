@@ -111,6 +111,7 @@ static void usage(FILE *fd)
       DEFAULT_RATE, DEFAULT_OSS_BUFFERS, DEFAULT_OSS_FRAGMENT);
 #endif
 
+
 #ifdef WITH_ALSA
     fprintf(fd, "ALSA device options:\n"
       "  -a <device>    Build a deck connected to ALSA audio device\n"
@@ -183,6 +184,14 @@ static int commit_deck(void)
 
 int main(int argc, char *argv[])
 {
+    int i;
+       fprintf(stderr, "Passed args: ");
+    for (i = 0; i < argc; ++i) {
+       printf("%s", argv[i]); 
+       fprintf(stderr, " %s", argv[i]);
+    }
+       fprintf(stderr, "\n");
+
     int rc = -1, n, priority;
     const char *scanner, *geo;
     char *endptr;
@@ -257,6 +266,7 @@ int main(int argc, char *argv[])
 
     argv++;
     argc--;
+
 
     while (argc > 0) {
 

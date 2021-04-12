@@ -20,33 +20,36 @@
 #ifndef TIMECODER_H
 #define TIMECODER_H
 
+#include <stddef.h>
 #include <stdbool.h>
 
 #include "lut.h"
 #include "pitch.h"
 
 #define TIMECODER_CHANNELS 2
+#define POSITIVE 1
+#define NEGATIVE 0
 
 typedef unsigned int bits_t;
 
 struct timecode_def {
     char *name, *desc;
-    int bits, /* number of bits in string */
-        resolution, /* wave cycles per second */
-        flags;
-    bits_t seed, /* LFSR value at timecode zero */
-        taps; /* central LFSR taps, excluding end taps */
-    unsigned int length, /* in cycles */
-        safe; /* last 'safe' timecode number (for auto disconnect) */
-    bool lookup; /* true if lut has been generated */
+    int bits,                       /* Number of bits in string */
+        resolution,                 /* Wave cycles per second */
+        flags;                      /* Special flags for some timecodes */
+    bits_t seed,                    /* LFSR value at timecode zero */
+           taps;                    /* Central LFSR taps, excluding end taps */
+    unsigned int length,            /* In cycles */
+                 safe;              /* Last 'safe' timecode number (for auto disconnect) */
+    bool lookup;                    /* True if lut has been generated */
     struct lut lut;
 };
 
 struct timecoder_channel {
-    bool positive, /* wave is in positive part of cycle */
-	swapped; /* wave recently swapped polarity */
+    bool polarity,                /* Wave is in polarity part of cycle */
+         swapped;                   /* Wave recently swapped polarity */
     signed int zero;
-    unsigned int crossing_ticker; /* samples since we last crossed zero */
+    unsigned int crossing_ticker;   /* Samples since we last crossed zero */
 };
 
 struct timecoder {
@@ -61,20 +64,21 @@ struct timecoder {
     /* Pitch information */
 
     bool forwards;
-    struct timecoder_channel primary, secondary;
+    struct timecoder_channel chR, chL;
     struct pitch pitch;
 
     /* Numerical timecode */
 
     signed int ref_level;
-    bits_t bitstream, /* actual bits from the record */
-        timecode; /* corrected timecode */
-    unsigned int valid_counter, /* number of successful error checks */
-        timecode_ticker; /* samples since valid timecode was read */
+
+    bits_t bitstream,               /* Actual bits from the record */
+           timecode;                /* Corrected timecode */
+    unsigned int valid_counter,     /* Number of successful error checks */
+                 timecode_ticker;   /* Samples since valid timecode was read */
 
     /* Feedback */
 
-    unsigned char *mon; /* x-y array */
+    unsigned char *mon;             /* x-y array */
     int mon_size, mon_counter;
 };
 
@@ -82,7 +86,7 @@ struct timecode_def* timecoder_find_definition(const char *name);
 void timecoder_free_lookup(void);
 
 void timecoder_init(struct timecoder *tc, struct timecode_def *def,
-                    double speed, unsigned int sample_rate, bool phono);
+        double speed, unsigned int sample_rate, bool phono);
 void timecoder_clear(struct timecoder *tc);
 
 int timecoder_monitor_init(struct timecoder *tc, int size);

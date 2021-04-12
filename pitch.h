@@ -40,11 +40,13 @@ static inline void pitch_init(struct pitch *p, double dt)
     p->v = 0.0;
 }
 
-/* Input an observation to the filter; in the last dt seconds the
- * position has moved by dx.
- *
- * Because the vinyl uses timestamps, the values for dx are discrete
- * rather than smooth. */
+/*  
+ *  Input an observation to the filter; in the last dt seconds the
+ *  position has moved by dx.
+ * 
+ *  Because the vinyl uses timestamps, the values for dx are discrete
+ *  rather than smooth. 
+ */
 
 static inline void pitch_dt_observation(struct pitch *p, double dx)
 {

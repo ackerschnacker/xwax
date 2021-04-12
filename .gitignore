@@ -3,8 +3,12 @@ xwax
 mktimecode
 *.o
 *.d
+*.wav
 .config
 .version
+.ycm_extra_conf.py
+.vimspector.json
+tags
 dist
 
 tests/cues
@@ -16,3 +20,4 @@ tests/scan-bpm
 tests/timecoder
 tests/track
 tests/ttf
+tests/status
