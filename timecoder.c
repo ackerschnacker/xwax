@@ -41,6 +41,7 @@
 #include "timecoder.h"
 
 #define ZERO_THRESHOLD (128 << 16)
+#define UINT128(hi, lo) (((__uint128_t) (hi)) << 64 | (lo))
 
 #define ZERO_RC 0.001 /* time constant for zero/rumble filter */
 
@@ -62,6 +63,7 @@
 #define SWITCH_PHASE 0x1 /* tone phase difference of 270 (not 90) degrees */
 #define SWITCH_PRIMARY 0x2 /* use left channel (not right) as primary */
 #define SWITCH_POLARITY 0x4 /* read bit values in negative (not positive) */
+#define OFFSET_MODULATION 0x8 /* Use offset modulation used for Traktor MK2 timecodes */
 
 static struct timecode_def timecodes[] = {
     {
@@ -117,6 +119,39 @@ static struct timecode_def timecodes[] = {
         .safe = 2090000,
     },
     {
+        .name = "traktor_mk2_a",
+        .desc = "Traktor Scratch MK2, side A",
+        .resolution = 2500,
+        .flags = OFFSET_MODULATION,
+        .bits = 110,
+        .seed = UINT128(0x339c1f39f18c, 0x7fe0063f8f83e0f9),
+        .taps = UINT128(0x400000000040, 0x0000010800000001),
+        .length = 1620000,
+        .safe = 1600000,
+    },    
+    {
+        .name = "traktor_mk2_b",
+        .desc = "Traktor Scratch MK2, side B",
+        .resolution = 2500,
+        .flags = OFFSET_MODULATION,
+        .bits = 110,
+        .seed = UINT128(0x20e73fc0707c, 0xf8c00e7ffcf807c0),
+        .taps = UINT128(0x400000000040, 0x0000010800000001),
+        .length = 2295000,
+        .safe = 2285000,
+    },    
+    {
+        .name = "traktor_mk2_cd",
+        .desc = "Traktor Scratch MK2, CD",
+        .resolution = 3000,
+        .flags = OFFSET_MODULATION,
+        .bits = 113,
+        .seed = UINT128(0x1f9fff01f1ff9, 0xfe7f9c1ff9cff3e3),
+        .taps = UINT128(0x400000000000, 0x1000010800000001),
+        .length = 4950000,
+        .safe = 4940000,
+    },
+    {
         .name = "mixvibes_v2",
         .desc = "MixVibes V2",
         .resolution = 1300,
@@ -159,7 +194,7 @@ static struct timecode_def timecodes[] = {
         .taps = 0x2ef1c,
         .length = 918500,
         .safe = 913000,
-    },
+    }
 };
 
 /*
