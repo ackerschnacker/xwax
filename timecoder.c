@@ -541,6 +541,8 @@ static void process_bitstream(struct timecoder *tc, signed int m)
 static void process_sample(struct timecoder *tc,
 			   signed int primary, signed int secondary)
 {
+    /* Todo: Pass the filtered derivative here to detect the zero-crossings */
+
     detect_zero_crossing(&tc->primary, primary, tc->zero_alpha, tc->threshold);
     detect_zero_crossing(&tc->secondary, secondary, tc->zero_alpha, tc->threshold);
 
