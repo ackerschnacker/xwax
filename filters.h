@@ -8,6 +8,9 @@
 int lp_xh = 0;
 double lp_Wc, lp_c;
 
+int left_old = 0;
+int right_old = 0;
+
 /* 
  * Applies a lowpass filter to the input signal x.
  * Wc is the normalized cut-off frequency 0 < Wc < 1, i.e. 2 * cutoff_freq / sampling_freq
@@ -33,5 +36,12 @@ inline void aplowpass_init(const unsigned short cutoff_freq, const unsigned shor
 {
     lp_Wc = 2.0 * cutoff_freq / sampling_freq;
     lp_c = (tan(M_PI * lp_Wc / 2) - 1) / (tan(M_PI * lp_Wc / 2) + 1);
+}
+
+inline int discrete_derivative(int x, int *x_old)
+{
+	int y = x - *x_old;
+	*x_old = x;
+	return 2 * y;
 }
 #endif /* end of include guard FILTER_H */
