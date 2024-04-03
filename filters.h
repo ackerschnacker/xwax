@@ -10,6 +10,11 @@ double lp_Wc, lp_c;
 
 int left_old = 0;
 int right_old = 0;
+int primary_old = 0;
+int secondary_old = 0;
+
+int ema_primary_old = 0;
+int ema_secondary_old = 0;
 
 /* 
  * Applies a lowpass filter to the input signal x.
@@ -36,6 +41,13 @@ inline void aplowpass_init(const unsigned short cutoff_freq, const unsigned shor
 {
     lp_Wc = 2.0 * cutoff_freq / sampling_freq;
     lp_c = (tan(M_PI * lp_Wc / 2) - 1) / (tan(M_PI * lp_Wc / 2) + 1);
+}
+
+inline int ema(int x, int *ema_old, double alpha)
+{
+	int y = alpha * x + (1 - alpha) * *ema_old;
+	*ema_old = y;
+	return 2 * y; 
 }
 
 inline int discrete_derivative(int x, int *x_old)
