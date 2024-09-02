@@ -25,6 +25,7 @@
 
 #include "lut.h"
 #include "pitch.h"
+#include "circular_buffer.h"
 
 #define TIMECODER_CHANNELS 2
 
@@ -86,6 +87,9 @@ struct timecoder {
 
     unsigned char *mon; /* x-y array */
     int mon_size, mon_counter;
+
+    /* Circular buffer for calculating the average offset difference */
+    struct circular_buffer cbuf;
 };
 
 struct timecode_def* timecoder_find_definition(const char *name);

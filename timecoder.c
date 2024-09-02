@@ -48,6 +48,11 @@
 
 #define REF_PEAKS_AVG 48 /* in wave cycles */
 
+/* Factor used by the Traktor MK2 by which the sinusoid is offset during 
+ * offset modulation */
+
+#define MK2_OFFSET_FACTOR 3.75
+
 /* The number of correct bits which come in before the timecode is
  * declared valid. Set this too low, and risk the record skipping
  * around (often to blank areas of track) during scratching */
@@ -376,6 +381,17 @@ void timecoder_init(struct timecoder *tc, struct timecode_def *def,
     tc->timecode_ticker = 0;
 
     tc->mon = NULL;
+
+    /* Since the offset-modulated signal does not oscillate around zero, 
+     * we need to statistically calculate the average envelope height to
+     * determine the exact offset using MK2_OFFSET_FACTOR */
+    if (tc->def->flags & OFFSET_MODULATION) {
+        for (int i = 0; i < tc->cbuf.size; ++i)
+            tc->cbuf.array[i] = 0;
+        tc->cbuf.size = 10;
+        tc->cbuf.read_ptr = 0;
+        tc->cbuf.write_ptr = 0;
+    }
 }
 
 /*
@@ -490,7 +506,12 @@ static void process_bitstream(struct timecoder *tc, signed int m)
 {
     bits_t b;
 
-    b = m > tc->ref_level;
+    if(tc->def->flags & OFFSET_MODULATION) {
+        cbuf_push(&tc->cbuf, m);
+        b = m > tc->ref_level;
+    }
+    else
+        b = m > tc->ref_level;
 
     /* Add it to the bitstream, and work out what we were expecting
      * (timecode). */
@@ -547,6 +568,14 @@ static void process_sample(struct timecoder *tc,
     double alpha = 0.3;
     int primary_deriv;
     int secondary_deriv;
+
+    /* 
+     * Todo: 
+     *  1. Get upper and lower reading to read the envelope height
+     *  2. Create array of envelope heights and get the average
+     *  3. Use envelope height + MK2_OFFSET_FACTOR to get offset
+     *  4. Get timecode readings when offset changes
+     */
 
     if (tc->def->flags & OFFSET_MODULATION) {
         primary_deriv = discrete_derivative(ema(primary, &ema_primary_old, alpha), &primary_old);
