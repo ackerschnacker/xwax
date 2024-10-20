@@ -22,6 +22,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "lut.h"
 #include "pitch.h"
@@ -90,6 +91,7 @@ struct timecoder {
 
     /* Circular buffer for calculating the average offset difference */
     struct circular_buffer cbuf;
+    signed int lower_reading, upper_reading;
 };
 
 struct timecode_def* timecoder_find_definition(const char *name);
@@ -153,6 +155,11 @@ static inline double timecoder_get_resolution(struct timecoder *tc)
 static inline double timecoder_revs_per_sec(struct timecoder *tc)
 {
     return (33.0 + 1.0 / 3) * tc->speed / 60;
+}
+
+static inline unsigned int envelope_height(signed int lower_reading, signed int upper_reading)
+{
+    return abs(lower_reading) + abs(upper_reading);
 }
 
 #endif

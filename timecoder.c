@@ -572,7 +572,7 @@ static void process_sample(struct timecoder *tc,
 
     /* 
      * Todo: 
-     *  1. Get upper and lower reading to read the envelope height
+     *  1. Get upper and lower reading to read the envelope height ✓
      *  2. Create array of envelope heights and get the average
      *  3. Use envelope height + MK2_OFFSET_FACTOR to get offset
      *  4. Get timecode readings when offset changes
@@ -586,6 +586,19 @@ static void process_sample(struct timecoder *tc,
     } else {
         detect_zero_crossing(&tc->primary, primary, tc->zero_alpha, tc->threshold);
         detect_zero_crossing(&tc->secondary, secondary, tc->zero_alpha, tc->threshold);
+    }
+
+    /* 
+     * Get upper and lower reading to calculate the envelope height
+     * Todo: Check if direction must be taken into account here
+     */
+
+    if (tc->primary.swapped)
+        tc->upper_reading = secondary;
+
+    if (tc->secondary.swapped) {
+        tc->lower_reading = primary;
+        cbuf_push(&tc->cbuf, envelope_height(tc->lower_reading, tc->upper_reading));
     }
 
     /* If an axis has been crossed, use the direction of the crossing
